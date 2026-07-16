@@ -1,0 +1,23 @@
+run:
+  id: paper1_sealtools_qwen3_8b_train
+  seed: 17
+  output_dir: outputs/paper1_sealtools_qwen3_8b_train
+data:
+  source: jsonl
+  path: data/raw/seal_tools_train
+  behavior_path: outputs/paper1_sealtools_qwen3_8b_train/model_behavior
+features:
+  backend: hf
+  model_id: Qwen/Qwen3-8B
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  layer: 18
+  path: outputs/paper1_sealtools_qwen3_8b_train/extracted_features.npz
+analysis:
+  heldout_fraction: 0.25
+  targets: [confusion, cooccurrence, order, substitutability]
+probe:
+  # A distinct, decision-context measurement; it is not part of geometry correlations.
+  contexts_path: outputs/paper1_sealtools_qwen3_8b_train/decision_contexts_all_layers.npz
+  report_path: outputs/paper1_sealtools_qwen3_8b_train/probe_outcome.json
+  layers: all
+  heldout_fraction: 0.25

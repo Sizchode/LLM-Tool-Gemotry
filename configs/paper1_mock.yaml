@@ -1,0 +1,15 @@
+run:
+  id: paper1_mock
+  seed: 17
+  output_dir: outputs/paper1_mock
+data:
+  source: mock
+  n_tools: 30
+  n_decisions: 900
+  n_traces: 240
+features:
+  backend: mock
+  dimension: 48
+analysis:
+  heldout_fraction: 0.25
+  targets: [confusion, cooccurrence, order, substitutability]

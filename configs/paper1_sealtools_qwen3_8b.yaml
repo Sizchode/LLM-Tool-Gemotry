@@ -1,0 +1,17 @@
+run:
+  id: paper1_sealtools_qwen3_8b_validation
+  seed: 17
+  output_dir: outputs/paper1_sealtools_qwen3_8b_validation
+data:
+  source: jsonl
+  path: data/raw/seal_tools_validation
+  behavior_path: outputs/paper1_sealtools_qwen3_8b_validation/model_behavior
+features:
+  backend: hf
+  model_id: Qwen/Qwen3-8B
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  layer: 18
+  path: outputs/paper1_sealtools_qwen3_8b_validation/extracted_features.npz
+analysis:
+  heldout_fraction: 0.25
+  targets: [confusion, cooccurrence, order, substitutability]
