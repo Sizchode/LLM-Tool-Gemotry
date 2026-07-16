@@ -22,12 +22,12 @@ CONFIG="${CONFIG:?CONFIG must be supplied by scripts/launch_paper1.sh}"
 mkdir -p /oscar/scratch/zliu328/llm_tool_ckpt/logs
 echo "job=${SLURM_JOB_ID:-local} host=$(hostname) config=$CONFIG python=$PY"
 if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi; else echo "nvidia-smi unavailable on this host"; fi
-read -r DATA MODEL CACHE LAYERS FEATURES BASELINE_MODEL BASELINES MENU_REPEATS <<< "$("$PY" - "$CONFIG" <<'PY'
+read -r DATA MODEL CACHE LAYERS FEATURES BASELINE_MODEL BASELINES MENU_REPEATS BRANCH_BATCH <<< "$("$PY" - "$CONFIG" <<'PY'
 import sys, yaml
 c=yaml.safe_load(open(sys.argv[1]))
 f=c['features']
 b=c['baselines']
-print(c['data']['path'], f['model_id'], f['cache_dir'], f.get('layers', 'all'), f['path'], b['model_id'], b['path'], c.get('rollout', {}).get('menu_repeats', 3))
+print(c['data']['path'], f['model_id'], f['cache_dir'], f.get('layers', 'all'), f['path'], b['model_id'], b['path'], c.get('rollout', {}).get('menu_repeats', 3), c.get('rollout', {}).get('max_branch_batch', 8))
 PY
 )"
 if [[ ! -f "$DATA/tools.jsonl" || ! -f "$DATA/decisions.jsonl" ]]; then
@@ -35,7 +35,8 @@ if [[ ! -f "$DATA/tools.jsonl" || ! -f "$DATA/decisions.jsonl" ]]; then
   exit 2
 fi
 "$PY" -m toolgeo validate-data --input "$DATA"
-if [[ ! -f "$FEATURES" ]]; then
+"$PY" -m toolgeo validate-model-template --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE"
+if ! "$PY" -m toolgeo validate-features --input "$FEATURES" --data "$DATA" >/dev/null 2>&1; then
   echo "Extracting standalone-card geometry: model=$MODEL layers=$LAYERS output=$FEATURES"
   "$PY" -m toolgeo extract-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --layers "$LAYERS" --output "$FEATURES"
 fi
@@ -43,6 +44,25 @@ if [[ ! -f "$BASELINES" ]]; then
   echo "Extracting strong semantic baseline: model=$BASELINE_MODEL output=$BASELINES"
   "$PY" -m toolgeo extract-baselines-hf --input "$DATA" --model-id "$BASELINE_MODEL" --cache-dir "$CACHE" --output "$BASELINES"
 fi
+# Cross-model specificity controls: extract any missing control geometry on
+# the identical tool inventory with the control model.
+while IFS='|' read -r CTRL_NAME CTRL_MODEL CTRL_PATH; do
+  [[ -z "$CTRL_NAME" ]] && continue
+  if [[ -z "$CTRL_MODEL" && ! -f "$CTRL_PATH" ]]; then
+    echo "control_paths entry '$CTRL_NAME' lacks model_id and $CTRL_PATH is absent" >&2
+    exit 2
+  fi
+  if ! "$PY" -m toolgeo validate-features --input "$CTRL_PATH" --data "$DATA" >/dev/null 2>&1; then
+    echo "Extracting control geometry: name=$CTRL_NAME model=$CTRL_MODEL output=$CTRL_PATH"
+    "$PY" -m toolgeo extract-hf --input "$DATA" --model-id "$CTRL_MODEL" --cache-dir "$CACHE" --layers "$LAYERS" --output "$CTRL_PATH"
+  fi
+done <<< "$("$PY" - "$CONFIG" <<'PY'
+import sys, yaml
+c = yaml.safe_load(open(sys.argv[1]))
+for entry in c.get('features', {}).get('control_paths', []) or []:
+    print(f"{entry['name']}|{entry.get('model_id','')}|{entry['path']}")
+PY
+)"
 BEHAVIOR="$($PY - "$CONFIG" <<'PY'
 import sys, yaml
 print(yaml.safe_load(open(sys.argv[1]))['data'].get('behavior_path', ''))
@@ -50,7 +70,7 @@ PY
 )"
 if [[ -n "$BEHAVIOR" && ! -f "$BEHAVIOR/decisions.jsonl" ]]; then
   echo "Running native tool-call constrained-trie rollout: output=$BEHAVIOR"
-  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$BEHAVIOR" --menu-repeats "$MENU_REPEATS" --seed "$($PY - "$CONFIG" <<'PY'
+  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$BEHAVIOR" --menu-repeats "$MENU_REPEATS" --max-branch-batch "$BRANCH_BATCH" --seed "$($PY - "$CONFIG" <<'PY'
 import sys, yaml
 print(yaml.safe_load(open(sys.argv[1]))['run']['seed'])
 PY
@@ -63,7 +83,7 @@ PY
 )"
 if [[ -n "$OPAQUE_BEHAVIOR" && ! -f "$OPAQUE_BEHAVIOR/decisions.jsonl" ]]; then
   echo "Running opaque-name control rollout: output=$OPAQUE_BEHAVIOR"
-  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$OPAQUE_BEHAVIOR" --menu-repeats "$MENU_REPEATS" --seed "$($PY - "$CONFIG" <<'PY'
+  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$OPAQUE_BEHAVIOR" --menu-repeats "$MENU_REPEATS" --max-branch-batch "$BRANCH_BATCH" --seed "$($PY - "$CONFIG" <<'PY'
 import sys, yaml
 print(yaml.safe_load(open(sys.argv[1]))['run']['seed'])
 PY

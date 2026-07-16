@@ -13,6 +13,12 @@ features:
   cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
   layers: all
   path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_bfcl_v4_qwen3_8b/tool_geometry.npz
+  # Cross-model specificity control: same tools, a different model's geometry.
+  # The sbatch launcher extracts any missing control geometry automatically.
+  control_paths:
+    - name: gemma3_4b_control
+      model_id: google/gemma-3-4b-it
+      path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_bfcl_v4_qwen3_8b/control_geometry_gemma3_4b.npz
 baselines:
   model_id: Qwen/Qwen3-Embedding-0.6B
   path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_bfcl_v4_qwen3_8b/semantic_baselines.npz
@@ -26,3 +32,9 @@ analysis:
   bootstrap_samples: 1000
   permutation_samples: 1000
   l2: 0.0001
+probe:
+  # Decision-context outcome probe; auxiliary to the geometry choice model.
+  contexts_path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_bfcl_v4_qwen3_8b/decision_contexts_all_layers.npz
+  report_path: outputs/paper1_bfcl_v4_qwen3_8b/probe_outcome.json
+  layers: all
+  heldout_fraction: 0.20

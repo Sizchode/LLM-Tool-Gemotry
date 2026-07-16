@@ -8,6 +8,7 @@ import yaml
 from .data import load_normalized, validate
 from .audit import manifest
 from .hf_extract import extract
+from .features import validate_geometry_artifact
 from .baselines import extract_semantic_embeddings
 from .probe import outcome_probe
 from .probe_extract import extract_decision_contexts
@@ -15,7 +16,7 @@ from .runner import run, run_transfer
 from .seal_tools import export as export_seal
 from .bfcl import export as export_bfcl
 from .toolhop import export as export_toolhop
-from .rollout_hf import rollout
+from .rollout_hf import render_native_choice_sequences, rollout
 
 def config(path: str) -> dict:
     with open(path, encoding="utf-8") as handle: return yaml.safe_load(handle)
@@ -27,6 +28,9 @@ def main() -> None:
     command.add_argument("--config", required=True)
     command = commands.add_parser("validate-data", help="validate normalized JSONL data")
     command.add_argument("--input", required=True)
+    command = commands.add_parser("validate-features", help="validate geometry metadata and layer shards")
+    command.add_argument("--input", required=True)
+    command.add_argument("--data", required=True, help="normalized data directory for exact tool-ID checking")
     command = commands.add_parser("transfer", help="fit on one dataset and evaluate a different dataset")
     command.add_argument("--source-config", required=True)
     command.add_argument("--target-config", required=True)
@@ -76,8 +80,13 @@ def main() -> None:
     command.add_argument("--output", required=True)
     command.add_argument("--menu-repeats", type=int, default=3, help="original order plus deterministic shuffles")
     command.add_argument("--seed", type=int, default=17)
+    command.add_argument("--max-branch-batch", type=int, default=8, help="maximum trie branch contexts per model forward")
     command.add_argument("--opaque-names", action="store_true", help="replace names by uniform opaque aliases in the rendered menu")
     command.add_argument("--include-multi-call", action="store_true", help="roll out multi-call labels (excluded by Paper 1 analysis)")
+    command = commands.add_parser("validate-model-template", help="verify native tool-call rendering before loading model weights")
+    command.add_argument("--input", required=True)
+    command.add_argument("--model-id", required=True)
+    command.add_argument("--cache-dir", default="/oscar/scratch/zliu328/llm_tool_ckpt/hf")
     args = parser.parse_args()
     if args.command == "run":
         result = run(config(args.config)); print(f"completed {result['run_id']}: {result['n_tools']} tools; report={config(args.config)['run']['output_dir']}/report.json")
@@ -86,19 +95,24 @@ def main() -> None:
         errors = validate(*loaded)
         if errors: raise SystemExit("\n".join(errors))
         print(f"valid normalized dataset: {len(loaded[0])} tools, {len(loaded[1])} decisions, {len(loaded[2])} traces")
+    elif args.command == "validate-features":
+        tools, _, _ = load_normalized(args.data)
+        errors = validate_geometry_artifact(args.input, [tool.tool_id for tool in tools])
+        if errors: raise SystemExit("\n".join(errors))
+        print(f"valid geometry artifact: {args.input}")
     elif args.command == "transfer":
         report = run_transfer(config(args.source_config), config(args.target_config), args.output)
         print(f"wrote {args.output}: {report['source_run_id']} -> {report['target_run_id']}")
     elif args.command == "extract-hf":
-        tools, _, _ = load_normalized(args.input)
-        errors = validate(tools, [], [])
+        tools, decisions, traces = load_normalized(args.input)
+        errors = validate(tools, decisions, traces)
         if errors: raise SystemExit("\n".join(errors))
         output = Path(args.output); output.parent.mkdir(parents=True, exist_ok=True)
         extract(tools, args.model_id, args.cache_dir, args.layers, output)
         print(f"wrote {output}")
     elif args.command == "extract-baselines-hf":
-        tools, _, _ = load_normalized(args.input)
-        errors = validate(tools, [], [])
+        tools, decisions, traces = load_normalized(args.input)
+        errors = validate(tools, decisions, traces)
         if errors: raise SystemExit("\n".join(errors))
         extract_semantic_embeddings(tools, args.model_id, args.cache_dir, Path(args.output), args.batch_size)
         print(f"wrote {args.output}")
@@ -120,8 +134,30 @@ def main() -> None:
     elif args.command == "import-toolhop":
         tools, decisions, traces = export_toolhop(Path(args.output), args.input_file)
         print(f"exported ToolHop: {tools} tools, {decisions} decisions, {traces} traces")
+    elif args.command == "validate-model-template":
+        from transformers import AutoTokenizer
+        tools, decisions, _ = load_normalized(args.input)
+        by_id = {tool.tool_id: tool for tool in tools}
+        decision = next((item for item in decisions if len(item.candidate_tool_ids) >= 2), None)
+        if decision is None:
+            raise SystemExit("dataset has no decision with at least two candidates")
+        tokenizer = AutoTokenizer.from_pretrained(args.model_id, cache_dir=args.cache_dir, use_fast=True)
+        candidates = decision.candidate_tool_ids[:2]
+        prompt, sequences, thinking_disabled = render_native_choice_sequences(
+            tokenizer, decision.query, candidates, by_id,
+        )
+        print(
+            f"valid native tool template: model={args.model_id} prompt_tokens={len(prompt)} "
+            f"candidate_lengths={[len(value) for value in sequences]} "
+            f"thinking_disabled={thinking_disabled}"
+        )
     else:
-        rollout(args.input, args.model_id, args.cache_dir, args.output, menu_repeats=args.menu_repeats, seed=args.seed, opaque_names=args.opaque_names, include_multi_call=args.include_multi_call)
+        rollout(
+            args.input, args.model_id, args.cache_dir, args.output,
+            menu_repeats=args.menu_repeats, seed=args.seed,
+            opaque_names=args.opaque_names, include_multi_call=args.include_multi_call,
+            max_branch_batch=args.max_branch_batch,
+        )
         print(f"wrote model behaviour to {args.output}")
 
 if __name__ == "__main__": main()

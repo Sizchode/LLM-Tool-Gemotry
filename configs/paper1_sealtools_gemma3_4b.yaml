@@ -1,0 +1,40 @@
+run:
+  id: paper1_sealtools_gemma3_4b_validation
+  seed: 17
+  output_dir: outputs/paper1_sealtools_gemma3_4b_validation
+data:
+  source: jsonl
+  path: data/raw/seal_tools_validation
+  behavior_path: outputs/paper1_sealtools_gemma3_4b_validation/model_behavior
+  opaque_behavior_path: outputs/paper1_sealtools_gemma3_4b_validation/model_behavior_opaque_names
+features:
+  backend: hf
+  model_id: google/gemma-3-4b-it
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  layers: all
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_gemma3_4b_validation/tool_geometry.npz
+  # Cross-model specificity control: same tools, a different model's geometry.
+  # The sbatch launcher extracts any missing control geometry automatically.
+  control_paths:
+    - name: qwen3_8b_control
+      model_id: Qwen/Qwen3-8B
+      path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_gemma3_4b_validation/control_geometry_qwen3_8b.npz
+baselines:
+  model_id: Qwen/Qwen3-Embedding-0.6B
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_gemma3_4b_validation/semantic_baselines.npz
+rollout:
+  menu_repeats: 3
+  opaque_name_control: true
+analysis:
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  stability_threshold: 0.80
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  l2: 0.0001
+probe:
+  # Decision-context outcome probe; auxiliary to the geometry choice model.
+  contexts_path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_gemma3_4b_validation/decision_contexts_all_layers.npz
+  report_path: outputs/paper1_sealtools_gemma3_4b_validation/probe_outcome.json
+  layers: all
+  heldout_fraction: 0.20

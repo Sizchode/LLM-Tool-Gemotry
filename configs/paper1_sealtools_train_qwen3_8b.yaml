@@ -13,9 +13,12 @@ features:
   cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
   layers: all
   path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/tool_geometry.npz
-  # Cross-model specificity control (optional but confirmatory when present):
-  # control_paths:
-  #   - {name: gemma_geometry, path: outputs/paper1_sealtools_gemma/control_features.npz}
+  # Cross-model specificity control: same tools, a different model's geometry.
+  # The sbatch launcher extracts any missing control geometry automatically.
+  control_paths:
+    - name: gemma3_4b_control
+      model_id: google/gemma-3-4b-it
+      path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/control_geometry_gemma3_4b.npz
 baselines:
   model_id: Qwen/Qwen3-Embedding-0.6B
   path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/semantic_baselines.npz
@@ -30,7 +33,7 @@ analysis:
   permutation_samples: 1000
   l2: 0.0001
 probe:
-  # A distinct, decision-context measurement; it is not part of geometry correlations.
+  # Decision-context outcome probe; auxiliary to the geometry choice model.
   contexts_path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/decision_contexts_all_layers.npz
   report_path: outputs/paper1_sealtools_qwen3_8b_train/probe_outcome.json
   layers: all

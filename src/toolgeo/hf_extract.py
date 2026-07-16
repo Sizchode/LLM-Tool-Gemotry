@@ -7,7 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from .rollout_hf import DEFAULT_SELECTION_PREFIX
+from .hf_model import config_int, load_generation_model
+from .rollout_hf import render_native_choice_sequences
 from .schema import Tool
 
 POOLINGS = ("name", "description", "schema", "last", "mean")
@@ -54,41 +55,48 @@ def _parse_layers(value: str, n_layers: int) -> list[int]:
     return result
 
 
-def _contextual_name_token(tokenizer: Any, name: str) -> int:
-    text = DEFAULT_SELECTION_PREFIX + name
-    encoded = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
-    start = len(DEFAULT_SELECTION_PREFIX)
-    for token_id, (left, right) in zip(encoded["input_ids"], encoded["offset_mapping"]):
-        if right > start and left < len(text):
-            return int(token_id)
-    raise ValueError(f"Tool name {name!r} contributes no token in tool-call context")
+def _contextual_name_token(tokenizer: Any, tool: Tool) -> int:
+    reference = Tool("__reference__", "reference_function", "reference", {"type": "object", "properties": {}}, "internal")
+    by_id = {tool.tool_id: tool, reference.tool_id: reference}
+    _, sequences, _ = render_native_choice_sequences(
+        tokenizer, "Select the appropriate function.", [tool.tool_id, reference.tool_id], by_id,
+    )
+    common = 0
+    while common < min(map(len, sequences)) and sequences[0][common] == sequences[1][common]:
+        common += 1
+    if common >= len(sequences[0]):
+        raise ValueError(f"Tool name {tool.name!r} has no discriminative native tool-call token")
+    return int(sequences[0][common])
 
 
 def extract(tools: list[Tool], model_id: str, cache_dir: str, layers: str, output: Path, max_tokens: int = 4096) -> None:
     try:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoTokenizer
     except ImportError as exc:
         raise RuntimeError("Install toolgeo[hf] to use extract-hf.") from exc
     device = "cuda" if torch.cuda.is_available() else "cpu"
     tokenizer = AutoTokenizer.from_pretrained(model_id, cache_dir=cache_dir, use_fast=True)
     if not getattr(tokenizer, "is_fast", False):
         raise ValueError("A fast tokenizer with return_offsets_mapping is required for span pooling.")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, cache_dir=cache_dir,
-        torch_dtype=torch.bfloat16 if device == "cuda" else torch.float32,
+    model = load_generation_model(
+        model_id, cache_dir, torch.bfloat16 if device == "cuda" else torch.float32,
     ).to(device).eval()
-    n_layers = int(getattr(model.config, "num_hidden_layers", 0))
+    n_layers = config_int(model, "num_hidden_layers")
     selected_layers = _parse_layers(layers, n_layers)
-    limit = min(int(getattr(model.config, "max_position_embeddings", max_tokens)), max_tokens)
+    limit = min(config_int(model, "max_position_embeddings", max_tokens), max_tokens)
     template_names = [item[0] for item in CARD_TEMPLATES]
-    hidden_size = int(getattr(model.config, "hidden_size"))
+    hidden_size = config_int(model, "hidden_size")
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_suffix(output.suffix + ".residuals.tmp.npy")
-    centroid_store = np.lib.format.open_memmap(
-        temporary, mode="w+", dtype=np.float16,
-        shape=(len(tools), len(selected_layers), len(POOLINGS), hidden_size),
-    )
+    final_shards = [output.with_name(f"{output.stem}.centroids.layer_{layer:03d}.npy") for layer in selected_layers]
+    temporary_shards = [path.with_suffix(path.suffix + ".tmp.npy") for path in final_shards]
+    centroid_stores = [
+        np.lib.format.open_memmap(
+            path, mode="w+", dtype=np.float16,
+            shape=(len(tools), len(POOLINGS), hidden_size),
+        )
+        for path in temporary_shards
+    ]
     template_cosine_by_tool = np.empty(
         (len(tools), len(CARD_TEMPLATES), len(selected_layers), len(POOLINGS)), dtype=np.float32,
     )
@@ -123,20 +131,26 @@ def extract(tools: list[Tool], model_id: str, cache_dir: str, layers: str, outpu
         normalized = variants_array / np.clip(np.linalg.norm(variants_array, axis=-1, keepdims=True), 1e-12, None)
         centroid = normalized.mean(axis=0)
         centroid /= np.clip(np.linalg.norm(centroid, axis=-1, keepdims=True), 1e-12, None)
-        centroid_store[tool_index - 1] = centroid.astype(np.float16)
+        for layer_index, store in enumerate(centroid_stores):
+            store[tool_index - 1] = centroid[layer_index].astype(np.float16)
         template_cosine_by_tool[tool_index - 1] = np.sum(normalized * centroid[None, ...], axis=-1)
         if tool_index % 50 == 0 or tool_index == len(tools):
             print(f"extracted card residuals {tool_index}/{len(tools)}", flush=True)
-    token_ids = [_contextual_name_token(tokenizer, tool.name) for tool in tools]
+    token_ids = [_contextual_name_token(tokenizer, tool) for tool in tools]
     output_weight = model.get_output_embeddings().weight.detach().float()
     name_unembedding = output_weight[token_ids].cpu().numpy().astype(np.float16)
-    centroid_store.flush()
+    for store in centroid_stores:
+        store.flush()
     try:
+        del centroid_stores
+        for temporary, final in zip(temporary_shards, final_shards):
+            temporary.replace(final)
         np.savez_compressed(
             output,
             tool_ids=np.array([tool.tool_id for tool in tools]),
-            centroids=centroid_store,
-            # centroids: [tool, residual_layer, pooling, hidden]
+            geometry_format=np.array("layer_sharded_v1"),
+            centroid_shards=np.array([path.name for path in final_shards]),
+            # each shard: [tool, pooling, hidden], one residual layer per file
             template_cosine_to_centroid=template_cosine_by_tool,
             template_names=np.array(template_names), layers=np.array(selected_layers, dtype=np.int32),
             pooling_names=np.array(POOLINGS), model_id=np.array(model_id),
@@ -145,5 +159,5 @@ def extract(tools: list[Tool], model_id: str, cache_dir: str, layers: str, outpu
             name_unembedding_norm=np.linalg.norm(name_unembedding.astype(np.float32), axis=1),
         )
     finally:
-        del centroid_store
-        temporary.unlink(missing_ok=True)
+        for temporary in temporary_shards:
+            temporary.unlink(missing_ok=True)

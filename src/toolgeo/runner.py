@@ -9,7 +9,7 @@ from .analysis import evaluate_choice_geometry, evaluate_cross_dataset_transfer
 from .baselines import deterministic_baseline_matrices
 from .behavior import matrices
 from .data import load_normalized, validate
-from .features import cosine, geometry_views
+from .features import cosine, geometry_views, stability_for_view, stability_tool_quantiles
 from .io import write_json, write_jsonl
 from .schema import record
 
@@ -138,6 +138,15 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
     np.savez_compressed(out / "behavior.npz", tool_ids=np.array([item.tool_id for item in tools]), **behavior)
     options = _analysis_options(config, seed)
     report = evaluate_choice_geometry(tools, decisions, geometry, baselines, stability, directional, **options)
+    selected_stability = stability_for_view(archive, report["selected_geometry_view"])
+    write_jsonl(out / "card_stability_by_tool.jsonl", (
+        {
+            "tool_id": tool.tool_id, "selected_geometry_view": report["selected_geometry_view"],
+            "template_stability": float(value),
+            "below_preregistered_threshold": bool(value < options["stability_threshold"]),
+        }
+        for tool, value in zip(tools, selected_stability)
+    ))
     control_reports = {}
     for name, path in control_specs:
         control_archive = _load_exact(path, tools, f"Control geometry {name}")
@@ -157,12 +166,21 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
     }
     opaque_report = None
     if opaque_decisions is not None:
-        opaque_tools = [
-            type(tool)(tool.tool_id, f"tool_{index:05d}", tool.description, tool.schema, tool.source)
-            for index, tool in enumerate(sorted(tools, key=lambda item: item.tool_id))
+        alias_path = Path(opaque_path) / "opaque_alias.json"
+        if not alias_path.is_file():
+            raise ValueError(
+                "Opaque rollout output lacks opaque_alias.json; re-run `toolgeo rollout-hf --opaque-names` "
+                "so the rendered alias map is recorded rather than re-derived."
+            )
+        import json as _json
+        alias = _json.loads(alias_path.read_text(encoding="utf-8"))
+        missing = [tool.tool_id for tool in tools if tool.tool_id not in alias]
+        if missing:
+            raise ValueError(f"opaque_alias.json is missing aliases for tools: {missing[:5]}...")
+        opaque_ordered = [
+            type(tool)(tool.tool_id, alias[tool.tool_id], tool.description, tool.schema, tool.source)
+            for tool in tools
         ]
-        opaque_by_id = {item.tool_id: item for item in opaque_tools}
-        opaque_ordered = [opaque_by_id[item.tool_id] for item in tools]
         opaque_baselines = deterministic_baseline_matrices(opaque_ordered)
         # Semantic description/schema/card embeddings remain valid except the
         # combined card, which contains the original name.
@@ -180,6 +198,17 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
         "cross_model_specificity_controls": control_reports,
         "cross_model_specificity_summary": specificity,
         "opaque_name_control": opaque_report,
+        "card_stability_distribution": stability_tool_quantiles(archive),
+        "selected_view_tool_stability_sensitivity": {
+            "view": report["selected_geometry_view"],
+            "preregistered_threshold": options["stability_threshold"],
+            "n_tools": len(tools),
+            "counts_below": {
+                str(threshold): int((selected_stability < threshold).sum())
+                for threshold in (0.70, 0.75, 0.80, 0.85, 0.90)
+            },
+            "artifact": str(out / "card_stability_by_tool.jsonl"),
+        },
         "substitutability": {"status": "unavailable_without_paired_counterfactual_menu_replacements"},
     }
     write_json(out / "report.json", result)

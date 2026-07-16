@@ -22,6 +22,14 @@ def _entry(path: Path) -> dict[str, Any]:
     return {"path": str(path), "bytes": path.stat().st_size, "sha256": _sha256(path)}
 
 
+def _geometry_shards(path: Path) -> list[Path]:
+    import numpy as np
+    with np.load(path) as archive:
+        if "centroid_shards" not in archive:
+            return []
+        return [path.parent / str(name) for name in archive["centroid_shards"].tolist()]
+
+
 def manifest(config_path: str, output: str) -> dict[str, Any]:
     """Hash the exact artifacts required to reproduce/audit one configured run."""
     import yaml
@@ -40,6 +48,7 @@ def manifest(config_path: str, output: str) -> dict[str, Any]:
         "model_behavior_decisions": behavior / "decisions.jsonl",
         "main_report": out / "report.json",
         "resolved_config": out / "config.resolved.json",
+        "selected_view_tool_stability": out / "card_stability_by_tool.jsonl",
     }
     if "baselines" in config:
         required["semantic_baselines"] = Path(config["baselines"]["path"])
@@ -54,6 +63,18 @@ def manifest(config_path: str, output: str) -> dict[str, Any]:
         required["decision_contexts"] = Path(probe["contexts_path"])
         required["probe_report"] = Path(probe["report_path"])
     missing = [name for name, path in required.items() if not path.is_file()]
+    feature_shards = _geometry_shards(required["extracted_features"]) if not missing else []
+    for index, path in enumerate(feature_shards):
+        required[f"extracted_features_layer_{index:03d}"] = path
+    missing.extend(name for name, path in required.items() if not path.is_file() and name not in missing)
+    for control in config.get("features", {}).get("control_paths", []) or []:
+        control_path = Path(control["path"])
+        control_key = f"control_geometry_{control['name']}"
+        required[control_key] = control_path
+        if control_path.is_file():
+            for index, path in enumerate(_geometry_shards(control_path)):
+                required[f"{control_key}_layer_{index:03d}"] = path
+    missing.extend(name for name, path in required.items() if not path.is_file() and name not in missing)
     if missing:
         raise FileNotFoundError("Cannot create final manifest; missing: " + ", ".join(missing))
     tools, source_decisions, source_traces = load_normalized(raw)

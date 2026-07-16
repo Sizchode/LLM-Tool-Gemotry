@@ -33,8 +33,10 @@ centroid. Mean template-to-centroid cosine is the stability score. Views below
 pooling are selected on a tool-disjoint validation split; the test split is
 read once for the selected view.
 
-`rollout-hf` renders `apply_chat_template(..., tools=...)`. It does not use the
-old handwritten `Tool name:` prompt. Candidate names form a token trie; model
+`rollout-hf` renders both the menu and each candidate assistant `tool_calls`
+message through `apply_chat_template(..., tools=...)`. It does not use a
+handwritten function-call prefix: Qwen JSON/XML syntax is never reused for a
+different family. Candidate native sequences form a token trie; model
 probability is normalized only where remaining candidates diverge, while
 shared/non-discriminative tokens contribute probability one. Thus a name is
 not penalized merely for containing more tokens. The original menu plus
@@ -42,16 +44,18 @@ deterministic shuffled orders are retained with explicit positions and raw
 scores in `rollout_scores.jsonl`. Prompts exceeding the context limit fail
 rather than silently left-truncating tools.
 
-For Qwen3, `enable_thinking=False` makes the controlled choice start at the
-documented `<tool_call>` JSON name field instead of conditioning on an absent,
-unobserved reasoning trace. The prefix matches the checkpoint's own chat
-template rather than a benchmark-specific imitation.
+For Qwen checkpoints that accept it, `enable_thinking=False` closes the
+reasoning path before the controlled call. Tokenizers with strict signatures
+are retried without that Qwen-only argument, and the diagnostic records which
+path was used. In either case the complete candidate call—not a hard-coded
+JSON prefix—is rendered by the checkpoint's own template.
 
 Paper 1 is a single categorical-choice estimand. Multi-call benchmark rows are
 recorded by the adapter but skipped by rollout by default; passing
 `--include-multi-call` is an explicit non-Paper-1 diagnostic. All-layer card
-residuals are written through a disk-backed temporary array before final NPZ
-compression, keeping host-memory use bounded for thousands of tools.
+residuals are written as one memory-mapped `.npy` shard per layer; the compact
+NPZ contains metadata and shard filenames. Analysis memory-maps each layer,
+avoiding a multi-gigabyte `savez_compressed`/load peak.
 
 BFCL v4 `live_multiple` directly supplies one gold function per ordered
 multi-function menu. ToolHop is multi-hop, so its adapter uses each official
@@ -62,6 +66,13 @@ multi-call rows for provenance but confirmatory choice analysis excludes them.
 The opaque-name control replaces rendered function names with uniform aliases
 while keeping tool IDs, descriptions, schemas, queries, menus, and geometry
 fixed. Its behavior is fit separately and reported under `opaque_name_control`.
+The exact alias map is an output artifact and is the only downstream source of
+aliases; analysis refuses to regenerate it.
+
+Per-tool stability for the validation-selected view is written to
+`card_stability_by_tool.jsonl`. The report includes counts below thresholds
+0.70--0.90 in addition to per-view mean/quantiles, enabling the preregistered
+0.80 gate and a transparent unstable-tool sensitivity analysis.
 
 ## Baselines
 
@@ -107,20 +118,20 @@ features, and order fixed.
 
 ```bash
 PYTHONPATH=src python -m toolgeo extract-hf \
-  --input data/raw/seal_tools_train --model-id Qwen/Qwen3-8B --layers all \
-  --output /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/tool_geometry.npz
+  --input data/raw/seal_tools_train --model-id Qwen/Qwen3.5-9B --layers all \
+  --output /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/matrix/sealtools_train/qwen35_9b/tool_geometry.npz
 
 PYTHONPATH=src python -m toolgeo extract-baselines-hf \
   --input data/raw/seal_tools_train --model-id Qwen/Qwen3-Embedding-0.6B \
   --output /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/semantic_baselines.npz
 
 PYTHONPATH=src python -m toolgeo rollout-hf \
-  --input data/raw/seal_tools_train --model-id Qwen/Qwen3-8B \
+  --input data/raw/seal_tools_train --model-id Qwen/Qwen3.5-9B \
   --menu-repeats 3 \
   --output outputs/paper1_sealtools_qwen3_8b_train/model_behavior
 
 PYTHONPATH=src python -m toolgeo run \
-  --config configs/paper1_sealtools_train_qwen3_8b.yaml
+  --config configs/paper1_sealtools_train_qwen35_9b.yaml
 ```
 
 `report.json` records the validation scan, single selected test result,
@@ -144,3 +155,14 @@ PYTHONPATH=src python -m toolgeo transfer \
 
 Running every ordered config pair produces the proposed fit/test transfer
 matrix. This is never approximated by random pair holdout.
+
+## Scope limitation
+
+This repository identifies stable standalone-card geometry and tests whether
+it predicts behavior under menu-order interventions. It does **not** yet claim
+a complete Act-I variance decomposition of menu composition, menu position,
+and decision-context residual representations. The auxiliary all-layer outcome
+probe is reported for every confirmatory matrix run, but it is descriptive and
+does not substitute for that variance decomposition. A future decision-context
+module must use explicit factorial menu interventions before making the broader
+claim.
