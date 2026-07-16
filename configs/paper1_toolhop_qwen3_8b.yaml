@@ -1,0 +1,28 @@
+run:
+  id: paper1_toolhop_qwen3_8b
+  seed: 17
+  output_dir: outputs/paper1_toolhop_qwen3_8b
+data:
+  source: jsonl
+  path: data/raw/toolhop
+  behavior_path: outputs/paper1_toolhop_qwen3_8b/model_behavior
+  opaque_behavior_path: outputs/paper1_toolhop_qwen3_8b/model_behavior_opaque_names
+features:
+  backend: hf
+  model_id: Qwen/Qwen3-8B
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  layers: all
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_toolhop_qwen3_8b/tool_geometry.npz
+baselines:
+  model_id: Qwen/Qwen3-Embedding-0.6B
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_toolhop_qwen3_8b/semantic_baselines.npz
+rollout:
+  menu_repeats: 3
+  opaque_name_control: true
+analysis:
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  stability_threshold: 0.80
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  l2: 0.0001

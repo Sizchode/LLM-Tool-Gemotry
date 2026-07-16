@@ -6,12 +6,23 @@ data:
   source: jsonl
   path: data/raw/seal_tools_validation
   behavior_path: outputs/paper1_sealtools_qwen3_8b_validation/model_behavior
+  opaque_behavior_path: outputs/paper1_sealtools_qwen3_8b_validation/model_behavior_opaque_names
 features:
   backend: hf
   model_id: Qwen/Qwen3-8B
   cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
-  layer: 18
-  path: outputs/paper1_sealtools_qwen3_8b_validation/extracted_features.npz
+  layers: all
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_validation/tool_geometry.npz
+baselines:
+  model_id: Qwen/Qwen3-Embedding-0.6B
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_validation/semantic_baselines.npz
+rollout:
+  menu_repeats: 3
+  opaque_name_control: true
 analysis:
-  heldout_fraction: 0.25
-  targets: [confusion, cooccurrence, order, substitutability]
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  stability_threshold: 0.80
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  l2: 0.0001

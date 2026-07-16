@@ -41,6 +41,14 @@ def manifest(config_path: str, output: str) -> dict[str, Any]:
         "main_report": out / "report.json",
         "resolved_config": out / "config.resolved.json",
     }
+    if "baselines" in config:
+        required["semantic_baselines"] = Path(config["baselines"]["path"])
+    if behavior:
+        required["model_behavior_scores"] = behavior / "rollout_scores.jsonl"
+    opaque_behavior = config["data"].get("opaque_behavior_path")
+    if opaque_behavior:
+        required["opaque_behavior_decisions"] = Path(opaque_behavior) / "decisions.jsonl"
+        required["opaque_behavior_scores"] = Path(opaque_behavior) / "rollout_scores.jsonl"
     probe = config.get("probe", {})
     if probe:
         required["decision_contexts"] = Path(probe["contexts_path"])
@@ -52,9 +60,10 @@ def manifest(config_path: str, output: str) -> dict[str, Any]:
     entries.update({name: _entry(path) for name, path in required.items()})
     _, behavior_decisions, _ = load_normalized(behavior)
     result = {
-        "schema_version": 1,
+        "schema_version": 2,
         "run_id": config["run"]["id"],
         "reproducibility_note": "All hashes are SHA-256 of exact input/output bytes.",
+        "hash_note": "SHA-256 is an integrity checksum for artifact identity, not encryption.",
         "input_counts": {"tools": len(tools), "decisions": len(source_decisions), "traces": len(source_traces)},
         "behavior_counts": {
             "decisions": len(behavior_decisions),

@@ -6,18 +6,32 @@ data:
   source: jsonl
   path: data/raw/seal_tools_train
   behavior_path: outputs/paper1_sealtools_qwen3_8b_train/model_behavior
+  opaque_behavior_path: outputs/paper1_sealtools_qwen3_8b_train/model_behavior_opaque_names
 features:
   backend: hf
   model_id: Qwen/Qwen3-8B
   cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
-  layer: 18
-  path: outputs/paper1_sealtools_qwen3_8b_train/extracted_features.npz
+  layers: all
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/tool_geometry.npz
+  # Cross-model specificity control (optional but confirmatory when present):
+  # control_paths:
+  #   - {name: gemma_geometry, path: outputs/paper1_sealtools_gemma/control_features.npz}
+baselines:
+  model_id: Qwen/Qwen3-Embedding-0.6B
+  path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/semantic_baselines.npz
+rollout:
+  menu_repeats: 3
+  opaque_name_control: true
 analysis:
-  heldout_fraction: 0.25
-  targets: [confusion, cooccurrence, order, substitutability]
+  validation_fraction: 0.20
+  test_fraction: 0.20
+  stability_threshold: 0.80
+  bootstrap_samples: 1000
+  permutation_samples: 1000
+  l2: 0.0001
 probe:
   # A distinct, decision-context measurement; it is not part of geometry correlations.
-  contexts_path: outputs/paper1_sealtools_qwen3_8b_train/decision_contexts_all_layers.npz
+  contexts_path: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/decision_contexts_all_layers.npz
   report_path: outputs/paper1_sealtools_qwen3_8b_train/probe_outcome.json
   layers: all
-  heldout_fraction: 0.25
+  heldout_fraction: 0.20

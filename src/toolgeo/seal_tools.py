@@ -5,7 +5,7 @@ import ast
 import re
 from pathlib import Path
 
-from .io import write_jsonl
+from .io import write_json, write_jsonl
 from .schema import Decision, Tool
 
 _APIS = re.compile(r"api_list\s*=\s*(\[.*?\])\s*\ntask_instruction\s*=\s*\"(.*?)\"\s*\nOutput:", re.S)
@@ -16,7 +16,7 @@ def export(split: str, output: Path, limit: int | None = None) -> tuple[int, int
     except ImportError as exc:
         raise RuntimeError("Install toolgeo[datasets] for Seal-Tools import.") from exc
     dataset = load_dataset("casey-martin/Seal-Tools", split=split)
-    tools: dict[str, Tool] = {}; decisions: list[Decision] = []
+    tools: dict[str, Tool] = {}; decisions: list[Decision] = []; gold_calls: list[dict] = []
     for position, row in enumerate(dataset):
         if limit is not None and position >= limit: break
         human = next(item["value"] for item in row["conversations"] if item["from"] == "human")
@@ -33,8 +33,20 @@ def export(split: str, output: Path, limit: int | None = None) -> tuple[int, int
         gold = calls[0]["api"] if calls else None
         gold_id = "seal." + gold if gold else None
         # Gold is a benchmark label, never an observed model behaviour.
-        decisions.append(Decision(str(row["id"]), query, candidates, gold_id, None, "seal_tools"))
+        decisions.append(Decision(
+            str(row["id"]), query, candidates, gold_id, None, "seal_tools",
+            candidates.index(gold_id) if gold_id in candidates else None,
+            None, None, "original", len(calls),
+        ))
+        gold_calls.append({"decision_id": str(row["id"]), "calls": calls})
     write_jsonl(output / "tools.jsonl", (tool.__dict__ for tool in tools.values()))
     write_jsonl(output / "decisions.jsonl", (decision.__dict__ for decision in decisions))
     write_jsonl(output / "traces.jsonl", [])
+    write_jsonl(output / "gold_calls.jsonl", gold_calls)
+    write_json(output / "source_manifest.json", {
+        "dataset": "casey-martin/Seal-Tools", "split": split,
+        "dataset_fingerprint": getattr(dataset, "_fingerprint", None),
+        "rows_read": len(decisions), "tools": len(tools), "decisions": len(decisions),
+        "limit": limit,
+    })
     return len(tools), len(decisions)

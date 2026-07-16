@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 
 from .data import load_normalized
-from .rollout_hf import _prompt
+from .rollout_hf import render_native_prompt
 
 
 def extract_decision_contexts(input_dir: str, model_id: str, cache_dir: str, layers: str, output: str, max_prompt_tokens: int = 4096) -> None:
@@ -42,8 +42,11 @@ def extract_decision_contexts(input_dir: str, model_id: str, cache_dir: str, lay
     residuals: list[np.ndarray] = []
     lengths: list[int] = []
     for number, decision in enumerate(decisions, 1):
-        ids = tokenizer.encode(_prompt(decision.query, decision.candidate_tool_ids, by_id), add_special_tokens=False)
-        ids = ids[-limit:]
+        ids = render_native_prompt(tokenizer, decision.query, decision.candidate_tool_ids, by_id)
+        if len(ids) > limit:
+            raise ValueError(
+                f"{decision.decision_id}: native prompt has {len(ids)} tokens (limit={limit}); refusing left truncation"
+            )
         encoded = torch.tensor([ids], device=device)
         with torch.inference_mode():
             hidden_states = model(input_ids=encoded, output_hidden_states=True, use_cache=False).hidden_states

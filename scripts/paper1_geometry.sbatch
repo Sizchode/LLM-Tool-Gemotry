@@ -22,16 +22,26 @@ CONFIG="${CONFIG:?CONFIG must be supplied by scripts/launch_paper1.sh}"
 mkdir -p /oscar/scratch/zliu328/llm_tool_ckpt/logs
 echo "job=${SLURM_JOB_ID:-local} host=$(hostname) config=$CONFIG python=$PY"
 if command -v nvidia-smi >/dev/null 2>&1; then nvidia-smi; else echo "nvidia-smi unavailable on this host"; fi
-read -r DATA MODEL CACHE LAYER FEATURES <<< "$("$PY" - "$CONFIG" <<'PY'
+read -r DATA MODEL CACHE LAYERS FEATURES BASELINE_MODEL BASELINES MENU_REPEATS <<< "$("$PY" - "$CONFIG" <<'PY'
 import sys, yaml
 c=yaml.safe_load(open(sys.argv[1]))
 f=c['features']
-print(c['data']['path'], f['model_id'], f['cache_dir'], f.get('layer', 18), f['path'])
+b=c['baselines']
+print(c['data']['path'], f['model_id'], f['cache_dir'], f.get('layers', 'all'), f['path'], b['model_id'], b['path'], c.get('rollout', {}).get('menu_repeats', 3))
 PY
 )"
+if [[ ! -f "$DATA/tools.jsonl" || ! -f "$DATA/decisions.jsonl" ]]; then
+  echo "Normalized dataset is missing at $DATA. Run the matching toolgeo import-* command first." >&2
+  exit 2
+fi
+"$PY" -m toolgeo validate-data --input "$DATA"
 if [[ ! -f "$FEATURES" ]]; then
-  echo "Extracting HF features: model=$MODEL layer=$LAYER output=$FEATURES"
-  "$PY" -m toolgeo extract-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --layer "$LAYER" --output "$FEATURES"
+  echo "Extracting standalone-card geometry: model=$MODEL layers=$LAYERS output=$FEATURES"
+  "$PY" -m toolgeo extract-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --layers "$LAYERS" --output "$FEATURES"
+fi
+if [[ ! -f "$BASELINES" ]]; then
+  echo "Extracting strong semantic baseline: model=$BASELINE_MODEL output=$BASELINES"
+  "$PY" -m toolgeo extract-baselines-hf --input "$DATA" --model-id "$BASELINE_MODEL" --cache-dir "$CACHE" --output "$BASELINES"
 fi
 BEHAVIOR="$($PY - "$CONFIG" <<'PY'
 import sys, yaml
@@ -39,8 +49,25 @@ print(yaml.safe_load(open(sys.argv[1]))['data'].get('behavior_path', ''))
 PY
 )"
 if [[ -n "$BEHAVIOR" && ! -f "$BEHAVIOR/decisions.jsonl" ]]; then
-  echo "Running deterministic candidate-choice rollout: output=$BEHAVIOR"
-  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$BEHAVIOR"
+  echo "Running native tool-call constrained-trie rollout: output=$BEHAVIOR"
+  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$BEHAVIOR" --menu-repeats "$MENU_REPEATS" --seed "$($PY - "$CONFIG" <<'PY'
+import sys, yaml
+print(yaml.safe_load(open(sys.argv[1]))['run']['seed'])
+PY
+)"
+fi
+OPAQUE_BEHAVIOR="$($PY - "$CONFIG" <<'PY'
+import sys, yaml
+print(yaml.safe_load(open(sys.argv[1]))['data'].get('opaque_behavior_path', ''))
+PY
+)"
+if [[ -n "$OPAQUE_BEHAVIOR" && ! -f "$OPAQUE_BEHAVIOR/decisions.jsonl" ]]; then
+  echo "Running opaque-name control rollout: output=$OPAQUE_BEHAVIOR"
+  "$PY" -m toolgeo rollout-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --output "$OPAQUE_BEHAVIOR" --menu-repeats "$MENU_REPEATS" --seed "$($PY - "$CONFIG" <<'PY'
+import sys, yaml
+print(yaml.safe_load(open(sys.argv[1]))['run']['seed'])
+PY
+)" --opaque-names
 fi
 "$PY" -m toolgeo run --config "$CONFIG"
 PROBE_CONTEXTS="$($PY - "$CONFIG" <<'PY'
@@ -60,7 +87,7 @@ import sys, yaml
 print(yaml.safe_load(open(sys.argv[1])).get('probe', {}).get('layers', 'all'))
 PY
 )"
-    "$PY" -m toolgeo extract-decision-hf --input "$DATA" --model-id "$MODEL" --cache-dir "$CACHE" --layers "$PROBE_LAYERS" --output "$PROBE_CONTEXTS"
+    "$PY" -m toolgeo extract-decision-hf --input "$BEHAVIOR" --model-id "$MODEL" --cache-dir "$CACHE" --layers "$PROBE_LAYERS" --output "$PROBE_CONTEXTS"
   fi
   "$PY" -m toolgeo probe-outcome --behavior "$BEHAVIOR" --contexts "$PROBE_CONTEXTS" --output "$PROBE_REPORT" --heldout-fraction "$($PY - "$CONFIG" <<'PY'
 import sys, yaml
