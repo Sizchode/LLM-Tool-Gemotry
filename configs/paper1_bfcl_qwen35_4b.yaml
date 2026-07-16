@@ -1,0 +1,5 @@
+run: {id: bfcl_qwen35_4b, output_dir: outputs/bfcl_qwen35_4b}
+data: {path: data/raw/bfcl_v4_live_multiple}
+model: {id: Qwen/Qwen3.5-4B, cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf}
+measurements: {max_branch_batch: 8, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/bfcl/qwen35_4b}
+baseline: {model_id: Qwen/Qwen3-Embedding-0.6B, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/bfcl/qwen35_4b/semantic_full_card.npz}

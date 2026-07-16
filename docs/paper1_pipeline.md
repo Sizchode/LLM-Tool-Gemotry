@@ -1,168 +1,79 @@
-# Paper 1: geometry predicts tool choice
+# Paper 1 experiment
 
-## Research question and claim boundary
+Paper 1 combines a small Act I and Act II.
 
-**RQ.** Does a language model form a stable, model-specific internal geometry
-over tools that predicts which distractor it selects, beyond similarities
-available from the tools' surface text and schemas?
+Act I asks whether tools form a recognizable, context-sensitive geometry and
+what card components shape it. Act II asks whether errors are local in that
+geometry and whether internal geometry follows model behavior more closely
+than a frozen text embedding.
 
-The confirmatory claim is narrower than “we can probe tool identity”:
+## Representation
 
-> Across tool-use datasets, intermediate residual representations induced by
-> standalone tool cards predict in-context tool-selection choices beyond
-> modern semantic embeddings, lexical/name similarity, schema structure, and
-> menu-position/directional priors.
+For a decision with query `q` and candidate menu `T`, each tool is rendered as:
 
-Geometry and behavior come from different prompt distributions. This is the
-central identification principle, not an ablation: standalone-card geometry
-must be stable across wording before it is allowed into the choice model.
-
-## Measurement protocol
-
-`extract-hf` renders every tool under three controlled card templates and
-stores their normalized centroid with shape `[tool, layer, pooling, hidden]`
-plus each template's cosine-to-centroid with shape
-`[tool, template, layer, pooling]`. Every residual layer is retained.
-The five preregistered pooling views are `name`, `description`, `schema`,
-`last`, and `mean`; exact spans use fast-tokenizer offset mappings. Cards are
-never concatenated with the benchmark inventory and are never truncated.
-
-The template-specific representations are normalized and averaged into a tool
-centroid. Mean template-to-centroid cosine is the stability score. Views below
-`analysis.stability_threshold` are ineligible. Among eligible views, layer and
-pooling are selected on a tool-disjoint validation split; the test split is
-read once for the selected view.
-
-`rollout-hf` renders both the menu and each candidate assistant `tool_calls`
-message through `apply_chat_template(..., tools=...)`. It does not use a
-handwritten function-call prefix: Qwen JSON/XML syntax is never reused for a
-different family. Candidate native sequences form a token trie; model
-probability is normalized only where remaining candidates diverge, while
-shared/non-discriminative tokens contribute probability one. Thus a name is
-not penalized merely for containing more tokens. The original menu plus
-deterministic shuffled orders are retained with explicit positions and raw
-scores in `rollout_scores.jsonl`. Prompts exceeding the context limit fail
-rather than silently left-truncating tools.
-
-For Qwen checkpoints that accept it, `enable_thinking=False` closes the
-reasoning path before the controlled call. Tokenizers with strict signatures
-are retried without that Qwen-only argument, and the diagnostic records which
-path was used. In either case the complete candidate call—not a hard-coded
-JSON prefix—is rendered by the checkpoint's own template.
-
-Paper 1 is a single categorical-choice estimand. Multi-call benchmark rows are
-recorded by the adapter but skipped by rollout by default; passing
-`--include-multi-call` is an explicit non-Paper-1 diagnostic. All-layer card
-residuals are written as one memory-mapped `.npy` shard per layer; the compact
-NPZ contains metadata and shard filenames. Analysis memory-maps each layer,
-avoiding a multi-gigabyte `savez_compressed`/load peak.
-
-BFCL v4 `live_multiple` directly supplies one gold function per ordered
-multi-function menu. ToolHop is multi-hop, so its adapter uses each official
-`sub_task` as the decision unit and retains the original chain separately; it
-does not relabel the top-level query with its first tool. Seal-Tools retains
-multi-call rows for provenance but confirmatory choice analysis excludes them.
-
-The opaque-name control replaces rendered function names with uniform aliases
-while keeping tool IDs, descriptions, schemas, queries, menus, and geometry
-fixed. Its behavior is fit separately and reported under `opaque_name_control`.
-The exact alias map is an output artifact and is the only downstream source of
-aliases; analysis refuses to regenerate it.
-
-Per-tool stability for the validation-selected view is written to
-`card_stability_by_tool.jsonl`. The report includes counts below thresholds
-0.70--0.90 in addition to per-view mean/quantiles, enabling the preregistered
-0.80 gate and a transparent unstable-tool sensitivity analysis.
-
-## Baselines
-
-Every confirmatory real run requires all of the following:
-
-- Qwen3-Embedding description, schema, and combined-card embeddings;
-- character 3–5 gram TF-IDF cosine for description, schema, and name;
-- structural schema similarity over parameter paths, types, and requiredness;
-- normalized tool-name edit similarity and common-prefix overlap;
-- menu position, name length, and output-embedding norm differences for the
-  asymmetric/prior component.
-
-Random/hash text vectors do not exist in the pipeline. Production runs use the
-documented lexical, structural, and frozen semantic-embedding baselines.
-
-## Statistical estimand
-
-For query/menu `q`, conditional logit models the observed candidate `j`:
-
-`P(j | menu_q, gold_i) ∝ exp(beta · x(i,j,q))`.
-
-The menu is the risk set, so co-occurrence is an exposure denominator rather
-than a competing predictor. `is_gold` absorbs the model's correctness base
-rate. All similarity values for the gold/self alternative are set to zero;
-otherwise cosine(self,self)=1 would trivially reveal the answer. Geometry is
-therefore tested on its ability to rank distractors.
-
-Directed confusion rates are reported as `count(gold=i, chosen=j) / exposure(i,j)`
-and decomposed into symmetric and antisymmetric components. Symmetric geometry
-targets the former. Menu position and candidate-minus-gold priors model the
-latter.
-
-Tools—not pairs—are deterministically partitioned into train, validation, and
-test. No validation/test tool appears in an earlier split's training menu.
-Layer/pooling selection uses validation only; the selected model is refit
-without test tools and evaluated once on held-out-gold test queries.
-Uncertainty uses query-cluster bootstrap, preserving all shuffled-menu repeats
-of one query. The incremental geometry test permutes geometry values only
-within a menu while holding its exposure, choice, gold indicator, surface
-features, and order fixed.
-
-## Commands and artifacts
-
-```bash
-PYTHONPATH=src python -m toolgeo extract-hf \
-  --input data/raw/seal_tools_train --model-id Qwen/Qwen3.5-9B --layers all \
-  --output /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/matrix/sealtools_train/qwen35_9b/tool_geometry.npz
-
-PYTHONPATH=src python -m toolgeo extract-baselines-hf \
-  --input data/raw/seal_tools_train --model-id Qwen/Qwen3-Embedding-0.6B \
-  --output /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/paper1_sealtools_qwen3_8b_train/semantic_baselines.npz
-
-PYTHONPATH=src python -m toolgeo rollout-hf \
-  --input data/raw/seal_tools_train --model-id Qwen/Qwen3.5-9B \
-  --menu-repeats 3 \
-  --output outputs/paper1_sealtools_qwen3_8b_train/model_behavior
-
-PYTHONPATH=src python -m toolgeo run \
-  --config configs/paper1_sealtools_train_qwen35_9b.yaml
+```text
+Name: ...
+Description: ...
+Schema: ...
 ```
 
-`report.json` records the validation scan, single selected test result,
-incremental negative-log-likelihood, clustered confidence interval,
-within-menu permutation p-value, coefficients, tool/decision split counts,
-and any cross-model control specified by `features.control_paths`.
+The renderer records each card's character boundaries as it builds the
+prompt. A fast tokenizer maps those declared boundaries to tokens through
+offset mappings. At every residual layer, the representation is the mean over
+that one card span. This is the only pooling rule.
 
-Cross-model specificity is run by adding another model's standalone-card NPZ
-as a control. The target model's behavior and all surface baselines remain
-fixed; the report then asks whether its own geometry predicts its choices
-better than the other model's geometry. Cross-dataset transfer fits all choice
-coefficients on one configured dataset after source-only view selection and
-then evaluates untouched queries from another configured dataset:
+Every eligible benchmark decision is measured. There is no sampled context
+set. Menu position is tested with one declared intervention: the exact reverse
+of the original menu. Variation in query and menu composition comes from the
+benchmark decisions in which a tool occurs.
 
-```bash
-PYTHONPATH=src python -m toolgeo transfer \
-  --source-config configs/paper1_sealtools_train_qwen3_8b.yaml \
-  --target-config configs/paper1_bfcl_v4_qwen3_8b.yaml \
-  --output outputs/transfers/seal_to_bfcl.json
+## Act I
+
+For each layer, RQ1 reports:
+
+- retrieval accuracy when a contextual occurrence is assigned to the nearest
+  leave-one-occurrence-out tool centroid;
+- mean same-tool cosine, mean different-tool cosine, and their difference;
+- the nearest-tool graph and schema enrichment at k=1, 5, and 10;
+- mean schema Jaccard among nearest neighbors and its difference from all tool
+  pairs;
+- neighbor overlap between adjacent layers.
+
+RQ2 uses exactly five cards: full, no name, no description, no schema, and an
+opaque positional name. It reports cosine displacement from the full card and
+within-menu neighbor overlap. This ablation is run on Seal-Tools with
+Qwen3.5-4B, not on all nine model-dataset combinations.
+
+## Act II
+
+The choice is determined in the checkpoint's native tool-call format. At each
+branch where candidate calls diverge, logits are normalized over the remaining
+candidates. Shared tokens do not contribute to the score.
+
+For every wrong choice and every layer, RQ4 reports:
+
+- cosine between the gold and selected wrong tool;
+- selected-wrong cosine minus the mean cosine of unselected distractors;
+- the selected tool's neighbor percentile among distractors;
+- Hit@1, Hit@5, and Hit@10;
+- Spearman correlation between directed confusion rate and contextual cosine
+  over exposed gold-candidate pairs.
+
+The same error-locality measurements are computed from one frozen full-card
+embedding model and from schema Jaccard. There is no fitted behavior model and
+no train/validation/test selection step.
+
+## Scope
+
+The core matrix is:
+
+```text
+{Qwen3.5-9B, Qwen3.5-4B, Gemma-3-4B-IT}
+    x
+{BFCL v4 live_multiple, Seal-Tools train, ToolHop}
 ```
 
-Running every ordered config pair produces the proposed fit/test transfer
-matrix. This is never approximated by random pair holdout.
-
-## Scope limitation
-
-This repository identifies stable standalone-card geometry and tests whether
-it predicts behavior under menu-order interventions. It does **not** yet claim
-a complete Act-I variance decomposition of menu composition, menu position,
-and decision-context residual representations. The auxiliary all-layer outcome
-probe is reported for every confirmatory matrix run, but it is descriptive and
-does not substitute for that variance decomposition. A future decision-context
-module must use explicit factorial menu interventions before making the broader
-claim.
+Paper 1 does not include base models, cross-dataset transfer, outcome probes,
+SAEs, tuned/Jacobian lenses, attention analysis, fusion tools, tool injection,
+registration failure, commitment failure, or plan inertia. Those are separate
+questions rather than robustness checks for this paper.

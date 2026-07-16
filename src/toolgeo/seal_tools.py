@@ -10,15 +10,14 @@ from .schema import Decision, Tool
 
 _APIS = re.compile(r"api_list\s*=\s*(\[.*?\])\s*\ntask_instruction\s*=\s*\"(.*?)\"\s*\nOutput:", re.S)
 
-def export(split: str, output: Path, limit: int | None = None) -> tuple[int, int]:
+def export(split: str, output: Path) -> tuple[int, int]:
     try:
         from datasets import load_dataset
     except ImportError as exc:
         raise RuntimeError("Install toolgeo[datasets] for Seal-Tools import.") from exc
     dataset = load_dataset("casey-martin/Seal-Tools", split=split)
     tools: dict[str, Tool] = {}; decisions: list[Decision] = []; gold_calls: list[dict] = []
-    for position, row in enumerate(dataset):
-        if limit is not None and position >= limit: break
+    for row in dataset:
         human = next(item["value"] for item in row["conversations"] if item["from"] == "human")
         answer = next(item["value"] for item in row["conversations"] if item["from"] == "gpt")
         match = _APIS.search(human)
@@ -47,6 +46,5 @@ def export(split: str, output: Path, limit: int | None = None) -> tuple[int, int
         "dataset": "casey-martin/Seal-Tools", "split": split,
         "dataset_fingerprint": getattr(dataset, "_fingerprint", None),
         "rows_read": len(decisions), "tools": len(tools), "decisions": len(decisions),
-        "limit": limit,
     })
     return len(tools), len(decisions)

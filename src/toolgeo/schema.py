@@ -20,9 +20,7 @@ class Decision:
     gold_tool_id: str | None
     chosen_tool_id: str | None
     source: str
-    # candidate_tool_ids is the complete, ordered risk set rendered to the
-    # model.  The explicit positions make order-bias analyses auditable even
-    # after adapters/rollouts are separated.
+    # candidate_tool_ids is the complete benchmark-provided ordered menu.
     gold_position: int | None = None
     chosen_position: int | None = None
     menu_order_seed: int | None = None

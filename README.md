@@ -1,99 +1,68 @@
 # LLM Tool Geometry
 
-Paper 1 asks whether a model has a stable internal *tool space* whose geometry
-predicts its own tool-selection confusions beyond name, description, schema,
-menu position, and a modern semantic-embedding baseline.
+This repository studies two questions. First, does the same tool retain a
+recognizable representation when its query, neighboring tools, and menu
+position change? Second, when a model chooses the wrong tool, is that tool
+locally close to the gold tool in the model's own representation space?
 
-The identification design deliberately separates the two measurements:
+The main experiments use three tool-capable instruction-tuned models:
 
-- geometry comes from standalone tool cards under three controlled wordings;
-- behavior comes from queries with an in-context candidate menu rendered by
-  the model's native tool-aware chat template.
+- `Qwen/Qwen3.5-9B`
+- `Qwen/Qwen3.5-4B`
+- `google/gemma-3-4b-it`
 
-This prevents prompt-local information from being used to predict itself. The
-main analysis is a conditional logit over each query's actual risk set, not a
-pairwise probe or correlation.
+They run on BFCL v4 `live_multiple`, Seal-Tools train, and ToolHop. There are
+no base-model runs in Paper 1.
+
+## What one run does
+
+For every single-tool decision, the model reads the query and candidate tool
+cards. Each card is rendered as its name, description, and JSON schema. The
+code records the exact character span while constructing the card, maps that
+span to tokens with tokenizer offsets, and mean-pools it at every residual
+layer. The same context is also rendered with the menu order reversed. No
+layer or pooling is selected.
+
+The model's choice is scored with its native tool-call format. Analysis then
+reports the layerwise same-tool retrieval accuracy, within-minus-between
+cosine gap, nearest-neighbor graph and schema enrichment, and whether the
+selected wrong tool is closer to the gold tool than the unselected
+distractors. A frozen full-card Qwen embedding and schema Jaccard are the two
+external comparisons. No conditional logit, outcome probe, transfer model,
+SAE, tuned lens, Jacobian lens, or audit stage is part of this paper pipeline.
 
 ## Install
 
 ```bash
 cd /users/zliu328/llm_tool
-python -m pip install -e '.[hf,analysis,baselines,probe,datasets]'
+/users/zliu328/.venv/bin/python -m pip install -e '.[hf,analysis,baselines,datasets]'
 ```
 
-Checkpoints and caches are kept outside the repository at
+Model weights and residual arrays are written under
 `/oscar/scratch/zliu328/llm_tool_ckpt`.
 
-## Paper 1 launch
+## Run
 
-Import and validate the three Paper-1 datasets once, then submit any complete
-pipeline. BFCL and ToolHop downloads are pinned to official revisions.
-
-```bash
-PYTHONPATH=src python -m toolgeo import-bfcl \
-  --output data/raw/bfcl_v4_live_multiple
-PYTHONPATH=src python -m toolgeo import-seal-tools \
-  --split train --output data/raw/seal_tools_train
-PYTHONPATH=src python -m toolgeo import-toolhop \
-  --output data/raw/toolhop
-
-PYTHONPATH=src python -m toolgeo validate-data --input data/raw/bfcl_v4_live_multiple
-PYTHONPATH=src python -m toolgeo validate-data --input data/raw/seal_tools_train
-PYTHONPATH=src python -m toolgeo validate-data --input data/raw/toolhop
-
-scripts/launch_paper1.sh --slurm configs/paper1_sealtools_train_qwen35_9b.yaml
-```
-
-ToolHop is expanded using its 3,912 official sub-tasks: each sub-task is one
-single-choice decision over that query's provided tool set, while the 995 full
-chains remain in `traces.jsonl` and `trajectories.jsonl`. Official Python
-sources are retained in `executables.jsonl` as untrusted data and are never
-executed by the importer. BFCL and Seal call payloads remain in
-`gold_calls.jsonl`.
-
-The job performs layer-sharded all-layer/multi-view card extraction, Qwen3-Embedding
-baselines, native tool-call rollouts with deterministic menu shuffles,
-conditional-logit analysis, optional outcome probes, and an integrity
-manifest. `SHA-256` in the manifest is only a reproducibility checksum; it is
-not encryption and does not alter model/data artifacts.
-
-See [docs/paper1_pipeline.md](docs/paper1_pipeline.md) for the estimand,
-controls, split protocol, and artifact shapes.
-
-## Experiment coverage
-
-- Confirmatory matrix: Qwen3.5-9B, Qwen3.5-9B-Base, and Gemma-3-4B-IT across
-  BFCL v4, Seal-Tools train, and ToolHop. `scripts/launch_matrix.sh --print`
-  shows all nine jobs; `scripts/launch_matrix.sh --submit` submits them as a
-  dependency chain so shared cross-model geometry files cannot race.
-- `scripts/launch_paper1.sh --slurm CONFIG` submits one full pipeline;
-  `scripts/launch_paper1.sh CONFIG` runs that full chain in the current shell;
-  `--analysis-only` is reserved for already-complete artifacts. The chain is
-  validate -> card-geometry extraction -> semantic baselines -> missing
-  cross-model control geometry -> native rollout -> opaque-name control
-  rollout -> choice-model analysis -> outcome probe -> audit manifest.
-- Cross-model specificity: every config declares `features.control_paths`
-  (name, model_id, path); the launcher extracts any missing control geometry
-  on the identical tool inventory.
-- Cross-dataset transfer matrix: `scripts/run_transfers.sh --print` previews
-  and `scripts/run_transfers.sh` runs the
-  six ordered Qwen3.5-9B transfers. Passing any three same-model configs runs
-  the corresponding Base or Gemma matrix.
-- Opaque-name contract: `rollout-hf --opaque-names` writes `opaque_alias.json`
-  next to its decisions; the analysis refuses to re-derive aliases and reads
-  that file as the single source of truth.
-
-Gemma weights are gated. Accept Google's Hugging Face license and authenticate
-on the compute node before submitting the matrix. The pipeline does not
-replace a missing/unsupported native Gemma tool template with a Qwen prompt;
-it fails explicitly, protecting the behavioral estimand.
-
-Before Gemma access is ready, a real-data non-confirmatory Seal pilot can run
-without cross-model controls:
+One experiment:
 
 ```bash
-scripts/launch_paper1.sh --slurm configs/pilot_sealtools_train_qwen35_9b.yaml
+cd /users/zliu328/llm_tool
+scripts/launch_paper1.sh --slurm configs/paper1_bfcl_qwen35_4b.yaml
 ```
 
-The older Qwen3-8B configs remain lightweight pilot/compatibility runs; they
-are not the preregistered 3x3 matrix.
+Print or submit the three-model by three-dataset matrix:
+
+```bash
+scripts/launch_matrix.sh --print
+scripts/launch_matrix.sh --submit
+```
+
+The Slurm entry point is `scripts/paper1_geometry.sbatch`. The component
+ablation is a separate Seal-Tools × Qwen3.5-4B job and is not repeated across
+the full matrix:
+
+```bash
+sbatch scripts/paper1_component_ablation.sbatch
+```
+
+See `docs/paper1_pipeline.md` for the measurement definitions.

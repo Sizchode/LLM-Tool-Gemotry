@@ -5,14 +5,16 @@ Each adapter emits `tools.jsonl`, `decisions.jsonl`, and optional
 
 ```json
 {"tool_id":"weather.lookup","name":"weather_lookup","description":"...","schema":{"type":"object","properties":{}},"source":"bfcl_v4"}
-{"decision_id":"d1","query":"...","candidate_tool_ids":["weather.lookup","weather.forecast"],"gold_tool_id":"weather.lookup","chosen_tool_id":"weather.forecast","source":"bfcl_v4","gold_position":0,"chosen_position":1,"menu_order_seed":731,"menu_variant_id":"shuffle-1","gold_call_count":1}
+{"decision_id":"d1","query":"...","candidate_tool_ids":["weather.lookup","weather.forecast"],"gold_tool_id":"weather.lookup","chosen_tool_id":"weather.forecast","source":"bfcl_v4","gold_position":0,"chosen_position":1,"menu_order_seed":null,"menu_variant_id":"original","gold_call_count":1}
 {"trace_id":"t1","tool_ids":["calendar.find","calendar.create"],"source":"dataset"}
 ```
 
 `candidate_tool_ids` is the complete ordered menu and therefore the statistical
 risk set. `gold_position` and `chosen_position` must agree with it.
-`menu_order_seed` is null for the original menu and records deterministic
-shuffle variants. `chosen_tool_id`/`chosen_position` may be null before rollout.
+Paper 1 scores behavior only in the benchmark's original menu order.
+`chosen_tool_id`/`chosen_position` may be null before measurement. The exact
+reverse order is a representation-stability context and is recorded in
+`context_index.jsonl`; it is not added as a second behavioral observation.
 
 `gold_call_count` prevents multi-call examples from being silently projected
 onto their first call. Paper 1's single-choice model excludes rows where this
