@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="420" viewBox="0 0 820 420">
+<style>text{font-family: sans-serif;font-size:12px} .grid{stroke:#ddd} .axis{stroke:#333} </style>
+<text x="410.0" y="24" text-anchor="middle" font-size="16">Menu-order matched-pair changes</text>
+<line class="grid" x1="70" x2="795" y1="355.0" y2="355.0"/>
+<text x="62" y="359.0" text-anchor="end">0.0%</text>
+<line class="grid" x1="70" x2="795" y1="293.0" y2="293.0"/>
+<text x="62" y="297.0" text-anchor="end">2.3%</text>
+<line class="grid" x1="70" x2="795" y1="231.0" y2="231.0"/>
+<text x="62" y="235.0" text-anchor="end">4.7%</text>
+<line class="grid" x1="70" x2="795" y1="169.00000000000003" y2="169.00000000000003"/>
+<text x="62" y="173.00000000000003" text-anchor="end">7.0%</text>
+<line class="grid" x1="70" x2="795" y1="106.99999999999997" y2="106.99999999999997"/>
+<text x="62" y="110.99999999999997" text-anchor="end">9.3%</text>
+<line class="grid" x1="70" x2="795" y1="45.00000000000006" y2="45.00000000000006"/>
+<text x="62" y="49.00000000000006" text-anchor="end">11.7%</text>
+<rect x="102.625" y="106.99999999999997" width="79.75" height="248.00000000000003" fill="#4c78a8"/>
+<text x="142.5" y="373" text-anchor="middle">0.6B&#10;83/888</text>
+<text x="142.5" y="101.99999999999997" text-anchor="middle">9.35%</text>
+<rect x="247.625" y="225.30706941820236" width="79.75" height="129.69293058179764" fill="#4c78a8"/>
+<text x="287.5" y="373" text-anchor="middle">1.7B&#10;48/982</text>
+<text x="287.5" y="220.30706941820236" text-anchor="middle">4.89%</text>
+<rect x="392.625" y="294.3380440250066" width="79.75" height="60.66195597499341" fill="#4c78a8"/>
+<text x="432.5" y="373" text-anchor="middle">4B&#10;23/1006</text>
+<text x="432.5" y="289.3380440250066" text-anchor="middle">2.29%</text>
+<rect x="537.625" y="305.9126359381049" width="79.75" height="49.087364061895094" fill="#4c78a8"/>
+<text x="577.5" y="373" text-anchor="middle">8B&#10;19/1027</text>
+<text x="577.5" y="300.9126359381049" text-anchor="middle">1.85%</text>
+<rect x="682.625" y="290.2221385542169" width="79.75" height="64.77786144578313" fill="#4c78a8"/>
+<text x="722.5" y="373" text-anchor="middle">14B&#10;25/1024</text>
+<text x="722.5" y="285.2221385542169" text-anchor="middle">2.44%</text>
+<line class="axis" x1="70" x2="70" y1="45" y2="355"/>
+<line class="axis" x1="70" x2="795" y1="355" y2="355"/>
+</svg>

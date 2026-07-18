@@ -1,0 +1,10 @@
+corpus:
+  kind: bfcl_rendered
+  order: original
+  n_prompts: all
+fit:
+  max_seq_len: 128
+  skip_first: 16
+  dim_batch: 8
+  compile: true
+

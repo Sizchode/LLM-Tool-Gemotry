@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="900" viewBox="0 0 820 900">
+<style>text{font-family: sans-serif;font-size:12px} .grid{stroke:#ddd} .axis{stroke:#333} </style>
+<text x="410.0" y="24" text-anchor="middle" font-size="16">Observed divergence positions in WikiText matched trajectories</text>
+<line class="grid" x1="80" x2="790" y1="150.0" y2="150.0"/>
+<line class="grid" x1="80" x2="790" y1="120.0" y2="120.0"/>
+<line class="grid" x1="80" x2="790" y1="90.0" y2="90.0"/>
+<line class="grid" x1="80" x2="790" y1="60.0" y2="60.0"/>
+<rect x="463.27272727272725" y="60.0" width="8" height="90.0" fill="#f58518"/>
+<rect x="527.8181818181818" y="134.48275862068965" width="8" height="15.517241379310345" fill="#f58518"/>
+<rect x="592.3636363636364" y="143.79310344827587" width="8" height="6.206896551724138" fill="#f58518"/>
+<rect x="656.909090909091" y="66.20689655172414" width="8" height="83.79310344827586" fill="#f58518"/>
+<rect x="721.4545454545454" y="112.75862068965517" width="8" height="37.241379310344826" fill="#f58518"/>
+<rect x="786.0" y="128.27586206896552" width="8" height="21.724137931034484" fill="#f58518"/>
+<text x="35" y="100" text-anchor="middle">0.6B</text>
+<line class="grid" x1="80" x2="790" y1="305.0" y2="305.0"/>
+<line class="grid" x1="80" x2="790" y1="275.0" y2="275.0"/>
+<line class="grid" x1="80" x2="790" y1="245.0" y2="245.0"/>
+<line class="grid" x1="80" x2="790" y1="215.0" y2="215.0"/>
+<rect x="463.27272727272725" y="215.0" width="8" height="90.0" fill="#f58518"/>
+<rect x="527.8181818181818" y="296.0" width="8" height="9.0" fill="#f58518"/>
+<rect x="592.3636363636364" y="300.5" width="8" height="4.5" fill="#f58518"/>
+<rect x="656.909090909091" y="246.5" width="8" height="58.5" fill="#f58518"/>
+<rect x="721.4545454545454" y="287.0" width="8" height="18.0" fill="#f58518"/>
+<rect x="786.0" y="300.5" width="8" height="4.5" fill="#f58518"/>
+<text x="35" y="255" text-anchor="middle">1.7B</text>
+<line class="grid" x1="80" x2="790" y1="460.0" y2="460.0"/>
+<line class="grid" x1="80" x2="790" y1="430.0" y2="430.0"/>
+<line class="grid" x1="80" x2="790" y1="400.0" y2="400.0"/>
+<line class="grid" x1="80" x2="790" y1="370.0" y2="370.0"/>
+<rect x="502.0" y="392.5" width="8" height="67.5" fill="#f58518"/>
+<rect x="644.0" y="448.75" width="8" height="11.25" fill="#f58518"/>
+<rect x="715.0" y="370.0" width="8" height="90.0" fill="#f58518"/>
+<rect x="786.0" y="403.75" width="8" height="56.25" fill="#f58518"/>
+<text x="35" y="410" text-anchor="middle">4B</text>
+<line class="grid" x1="80" x2="790" y1="615.0" y2="615.0"/>
+<line class="grid" x1="80" x2="790" y1="585.0" y2="585.0"/>
+<line class="grid" x1="80" x2="790" y1="555.0" y2="555.0"/>
+<line class="grid" x1="80" x2="790" y1="525.0" y2="525.0"/>
+<rect x="502.0" y="537.8571428571429" width="8" height="77.14285714285714" fill="#f58518"/>
+<rect x="644.0" y="602.1428571428571" width="8" height="12.857142857142858" fill="#f58518"/>
+<rect x="715.0" y="525.0" width="8" height="90.0" fill="#f58518"/>
+<rect x="786.0" y="563.5714285714286" width="8" height="51.42857142857143" fill="#f58518"/>
+<text x="35" y="565" text-anchor="middle">8B</text>
+<line class="grid" x1="80" x2="790" y1="770.0" y2="770.0"/>
+<line class="grid" x1="80" x2="790" y1="740.0" y2="740.0"/>
+<line class="grid" x1="80" x2="790" y1="710.0" y2="710.0"/>
+<line class="grid" x1="80" x2="790" y1="680.0" y2="680.0"/>
+<rect x="431.0" y="680.0" width="8" height="90.0" fill="#f58518"/>
+<rect x="608.5" y="729.0909090909091" width="8" height="40.90909090909091" fill="#f58518"/>
+<rect x="667.6666666666667" y="729.0909090909091" width="8" height="40.90909090909091" fill="#f58518"/>
+<rect x="786.0" y="761.8181818181819" width="8" height="8.181818181818182" fill="#f58518"/>
+<text x="35" y="720" text-anchor="middle">14B</text>
+<text x="410.0" y="890" text-anchor="middle">First differing tool-name token position from &lt;tool_call&gt;</text>
+</svg>
