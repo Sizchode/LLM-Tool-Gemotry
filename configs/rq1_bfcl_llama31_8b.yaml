@@ -1,0 +1,22 @@
+run:
+  id: rq1_bfcl_llama31_8b
+  output_dir: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/rq1_bfcl_llama31_8b
+data:
+  category: live_multiple
+  revision: c15b2a151662cac9839c96d7dfb1493b5329c975
+  directory: /users/zliu328/llm_tool/data/raw/bfcl_v3_live_multiple/official
+model:
+  family: llama3_1
+  id: meta-llama/Llama-3.1-8B-Instruct
+  revision: 0e9e39f249a16976918f6564b8830bc894c89659
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  dtype: bfloat16
+  device: cuda
+extraction:
+  batch_size: 1
+generation:
+  enable_thinking: false
+  batch_size: 1
+  max_new_tokens: 200
+analysis:
+  replication_decoder_layer: 31

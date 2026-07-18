@@ -5,18 +5,16 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "toolgeo"
 version = "0.1.0"
-description = "Reusable tool-geometry experiments for LLM agents"
+description = "BFCL decision-state experiments for tool calling"
 requires-python = ">=3.10"
-dependencies = ["numpy>=1.26", "PyYAML>=6.0"]
+dependencies = [
+  "PyYAML>=6.0",
+  "torch>=2.4",
+  "transformers==5.14.0",
+]
 
 [project.optional-dependencies]
-hf = ["torch>=2.4", "transformers>=5.2", "safetensors>=0.5"]
-datasets = ["datasets>=3.0"]
-analysis = ["scipy>=1.12"]
-baselines = ["sentence-transformers>=3.0"]
-
-[project.scripts]
-toolgeo = "toolgeo.cli:main"
+test = ["pytest>=8.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

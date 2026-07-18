@@ -1,68 +1,86 @@
-# LLM Tool Geometry
+# Tool-Specific Decision States on BFCL
 
-This repository studies two questions. First, does the same tool retain a
-recognizable representation when its query, neighboring tools, and menu
-position change? Second, when a model chooses the wrong tool, is that tool
-locally close to the gold tool in the model's own representation space?
+This code runs the BFCL-first experiment in
+`/users/zliu328/tool_geometry_master_plan.md`. It uses the official BFCL v3
+`live_multiple` release: despite the category name, each of its 1,053 records
+has one gold function call and a benchmark-provided candidate menu.
 
-The main experiments use three tool-capable instruction-tuned models:
+The Wu et al. replication and our extensions are kept separate:
 
-- `Qwen/Qwen3.5-9B`
-- `Qwen/Qwen3.5-4B`
-- `google/gemma-3-4b-it`
+- replication: original menu, Wu et al.'s decoder block for each replicated
+  architecture, leave-one-out tool means, and global cosine argmax;
+- extensions: every decoder layer, prediction restricted to the benchmark
+  menu, error-conditioned agreement with native generation, and matched
+  original-versus-reverse menus.
 
-They run on BFCL v4 `live_multiple`, Seal-Tools train, and ToolHop. There are
-no base-model runs in Paper 1.
+Configured model families are:
 
-## What one run does
+- `Qwen/Qwen3-4B` and `Qwen/Qwen3-8B`;
+- `meta-llama/Llama-3.1-8B-Instruct`, using its official tool template and
+  JSON call format;
+- `google/gemma-4-E4B-it`, using its official tool template, thinking mode,
+  and Google's published function-call parser;
+- `google/gemma-3-4b-it`, with model loading and raw decoder extraction
+  implemented but BFCL execution deliberately blocked until the exact Wu et
+  al. Gemma 3 prompt is recovered. Gemma 3's official Hugging Face template
+  does not render a `tools` argument, so substituting a new prompt would not be
+  a replication.
 
-For every single-tool decision, the model reads the query and candidate tool
-cards. Each card is rendered as its name, description, and JSON schema. The
-code records the exact character span while constructing the card, maps that
-span to tokens with tokenizer offsets, and mean-pools it at every residual
-layer. The same context is also rendered with the menu order reversed. No
-layer or pooling is selected.
+Raw decoder blocks are addressed explicitly: Qwen/Llama use
+`model.model.layers`; Gemma 3/4 use `model.model.language_model.layers`.
 
-The model's choice is scored with its native tool-call format. Analysis then
-reports the layerwise same-tool retrieval accuracy, within-minus-between
-cosine gap, nearest-neighbor graph and schema enrichment, and whether the
-selected wrong tool is closer to the gold tool than the unselected
-distractors. A frozen full-card Qwen embedding and schema Jaccard are the two
-external comparisons. No conditional logit, outcome probe, transfer model,
-SAE, tuned lens, Jacobian lens, or audit stage is part of this paper pipeline.
+The code does not implement bootstrap, Monte Carlo analysis, random menu
+permutations, constrained candidate scoring, or the under-specified τ-bench
+classifier.
 
 ## Install
 
 ```bash
 cd /users/zliu328/llm_tool
-/users/zliu328/.venv/bin/python -m pip install -e '.[hf,analysis,baselines,datasets]'
+/users/zliu328/.local/bin/uv pip install --python /users/zliu328/.venv/bin/python -e '.[test]'
 ```
 
-Model weights and residual arrays are written under
-`/oscar/scratch/zliu328/llm_tool_ckpt`.
+## Run locally
 
-## Run
-
-One experiment:
+The three experiment stages use the same rendered prompts saved in
+`examples.jsonl`:
 
 ```bash
-cd /users/zliu328/llm_tool
-scripts/launch_paper1.sh --slurm configs/paper1_bfcl_qwen35_4b.yaml
+export PYTHONPATH=/users/zliu328/llm_tool/src
+CONFIG=/users/zliu328/llm_tool/configs/rq1_bfcl_qwen3_4b.yaml
+/users/zliu328/.venv/bin/python -m toolgeo.data.bfcl --config "$CONFIG"
+/users/zliu328/.venv/bin/python -m toolgeo.extract_decision_states --config "$CONFIG"
+/users/zliu328/.venv/bin/python -m toolgeo.generate_tool_calls --config "$CONFIG"
+/users/zliu328/.venv/bin/python -m toolgeo.analyze_bfcl --config "$CONFIG"
+/users/zliu328/.venv/bin/python -m toolgeo.analyze_order --config "$CONFIG"
 ```
 
-Print or submit the three-model by three-dataset matrix:
+Qwen3 and Gemma 4 thinking remain enabled. Generation is greedy with
+`max_new_tokens=200`. Each family is parsed according to its checkpoint
+protocol; the same saved rendered prompt is used for extraction and
+generation.
+
+## Run with Slurm
+
+Print the commands for all runnable configured models:
 
 ```bash
-scripts/launch_matrix.sh --print
-scripts/launch_matrix.sh --submit
+scripts/launch_bfcl.sh
 ```
 
-The Slurm entry point is `scripts/paper1_geometry.sbatch`. The component
-ablation is a separate Seal-Tools × Qwen3.5-4B job and is not repeated across
-the full matrix:
+Submit one model or the runnable matrix:
 
 ```bash
-sbatch scripts/paper1_component_ablation.sbatch
+scripts/launch_bfcl.sh --submit configs/rq1_bfcl_qwen3_4b.yaml
+scripts/launch_bfcl.sh --submit
 ```
 
-See `docs/paper1_pipeline.md` for the measurement definitions.
+The Llama 3.1 and Gemma checkpoints require Hugging Face access. Verify access
+with `hf auth whoami` before submitting them. The default launcher excludes the
+blocked Gemma 3 configuration.
+
+Model checkpoints and experiment outputs live under
+`/oscar/scratch/zliu328/llm_tool_ckpt`. The primary result files are
+`bfcl_replication_results.csv`, `bfcl_results.csv`,
+`bfcl_error_conditioning.csv`, `order_results.csv`, and
+`order_representation_results.csv`.

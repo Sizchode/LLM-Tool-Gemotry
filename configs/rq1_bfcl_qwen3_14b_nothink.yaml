@@ -1,0 +1,22 @@
+run:
+  id: rq1_bfcl_qwen3_14b_nothink
+  output_dir: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/rq1_bfcl_qwen3_14b_nothink
+data:
+  category: live_multiple
+  revision: c15b2a151662cac9839c96d7dfb1493b5329c975
+  directory: /users/zliu328/llm_tool/data/raw/bfcl_v3_live_multiple/official
+model:
+  family: qwen3
+  id: Qwen/Qwen3-14B
+  revision: 40c069824f4251a91eefaf281ebe4c544efd3e18
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  dtype: bfloat16
+  device: cuda
+extraction:
+  batch_size: 1
+generation:
+  enable_thinking: false
+  batch_size: 1
+  max_new_tokens: 200
+analysis:
+  replication_decoder_layer: 39

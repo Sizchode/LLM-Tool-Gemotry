@@ -1,5 +1,0 @@
-run: {id: toolhop_gemma3_4b, output_dir: outputs/toolhop_gemma3_4b}
-data: {path: data/raw/toolhop}
-model: {id: google/gemma-3-4b-it, cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf}
-measurements: {max_branch_batch: 8, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/toolhop/gemma3_4b}
-baseline: {model_id: Qwen/Qwen3-Embedding-0.6B, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/toolhop/gemma3_4b/semantic_full_card.npz}

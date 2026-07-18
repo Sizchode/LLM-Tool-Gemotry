@@ -1,0 +1,22 @@
+run:
+  id: rq1_bfcl_gemma4_e4b
+  output_dir: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/rq1_bfcl_gemma4_e4b
+data:
+  category: live_multiple
+  revision: c15b2a151662cac9839c96d7dfb1493b5329c975
+  directory: /users/zliu328/llm_tool/data/raw/bfcl_v3_live_multiple/official
+model:
+  family: gemma4
+  id: google/gemma-4-E4B-it
+  revision: fa62d88df2e6df5efa9d26ad6b3beaea2765f0cd
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  dtype: bfloat16
+  device: cuda
+extraction:
+  batch_size: 1
+generation:
+  enable_thinking: true
+  batch_size: 1
+  max_new_tokens: 200
+analysis:
+  replication_decoder_layer: 41

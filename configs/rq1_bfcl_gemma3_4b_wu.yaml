@@ -1,0 +1,25 @@
+# Loader and decoder extraction are implemented, but this config intentionally
+# stops during prompt rendering until Wu et al.'s exact Gemma 3 prompt protocol
+# is available. The official Gemma 3 HF template does not render `tools`.
+run:
+  id: rq1_bfcl_gemma3_4b_wu
+  output_dir: /oscar/scratch/zliu328/llm_tool_ckpt/artifacts/rq1_bfcl_gemma3_4b_wu
+data:
+  category: live_multiple
+  revision: c15b2a151662cac9839c96d7dfb1493b5329c975
+  directory: /users/zliu328/llm_tool/data/raw/bfcl_v3_live_multiple/official
+model:
+  family: gemma3
+  id: google/gemma-3-4b-it
+  revision: 093f9f388b31de276ce2de164bdc2081324b9767
+  cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf
+  dtype: bfloat16
+  device: cuda
+extraction:
+  batch_size: 1
+generation:
+  enable_thinking: false
+  batch_size: 1
+  max_new_tokens: 200
+analysis:
+  replication_decoder_layer: 33

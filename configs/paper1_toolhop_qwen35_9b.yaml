@@ -1,5 +1,0 @@
-run: {id: toolhop_qwen35_9b, output_dir: outputs/toolhop_qwen35_9b}
-data: {path: data/raw/toolhop}
-model: {id: Qwen/Qwen3.5-9B, cache_dir: /oscar/scratch/zliu328/llm_tool_ckpt/hf}
-measurements: {max_branch_batch: 8, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/toolhop/qwen35_9b}
-baseline: {model_id: Qwen/Qwen3-Embedding-0.6B, path: /oscar/scratch/zliu328/llm_tool_ckpt/paper1/toolhop/qwen35_9b/semantic_full_card.npz}
