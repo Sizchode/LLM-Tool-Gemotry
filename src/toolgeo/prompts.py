@@ -1,7 +1,6 @@
 """Render BFCL menus with each checkpoint's official chat template."""
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from .data.bfcl import BFCLExample
@@ -101,72 +100,3 @@ def tokenize_prompts(prompt_interface: Any, prompts: list[str]) -> dict[str, Any
     finally:
         tokenizer.padding_side = previous_padding_side
     return encoded
-
-
-def qwen3_tool_card_char_spans(
-    prompt: str, functions: list[dict[str, Any]]
-) -> list[tuple[int, int]]:
-    """Locate the exact JSON card lines emitted by the official Qwen3 template."""
-    opening = "<tools>\n"
-    closing = "\n</tools>"
-    if prompt.count(opening) != 1 or prompt.count(closing) != 1:
-        raise ValueError("Qwen3 prompt does not contain exactly one tools block")
-    body_start = prompt.index(opening) + len(opening)
-    body_end = prompt.index(closing, body_start)
-    body = prompt[body_start:body_end]
-    lines = body.split("\n")
-    expected = tool_schemas(tuple(functions))
-    if len(lines) != len(expected):
-        raise ValueError("Qwen3 tools block line count does not match candidate menu")
-
-    spans: list[tuple[int, int]] = []
-    cursor = body_start
-    for line, schema in zip(lines, expected):
-        try:
-            rendered_schema = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError("Qwen3 tool card line is not valid JSON") from exc
-        if rendered_schema != schema:
-            raise ValueError("Qwen3 rendered tool card differs from the BFCL schema")
-        spans.append((cursor, cursor + len(line)))
-        cursor += len(line) + 1
-    if cursor - 1 != body_end:
-        raise ValueError("Qwen3 tool card character spans do not cover the tools block")
-    return spans
-
-
-def tool_card_token_spans(
-    prompt_interface: Any,
-    prompt: str,
-    functions: list[dict[str, Any]],
-    family: str,
-) -> tuple[dict[str, Any], list[tuple[int, int]], list[tuple[int, int]]]:
-    """Map exact rendered card character spans to overlapping prompt tokens."""
-    if family != "qwen3":
-        raise ValueError("tool-card span extraction is currently defined for Qwen3")
-    char_spans = qwen3_tool_card_char_spans(prompt, functions)
-    tokenizer = text_tokenizer(prompt_interface)
-    encoded = tokenizer(
-        prompt,
-        add_special_tokens=False,
-        return_offsets_mapping=True,
-        return_tensors="pt",
-    )
-    offsets = [tuple(map(int, pair)) for pair in encoded.pop("offset_mapping")[0]]
-    token_spans: list[tuple[int, int]] = []
-    for char_start, char_end in char_spans:
-        indices = [
-            index
-            for index, (token_start, token_end) in enumerate(offsets)
-            if token_end > char_start and token_start < char_end
-        ]
-        if not indices:
-            raise ValueError("rendered tool card contains no tokenizer tokens")
-        if indices != list(range(indices[0], indices[-1] + 1)):
-            raise ValueError("tool-card tokens are not contiguous")
-        token_start = indices[0]
-        token_end = indices[-1] + 1
-        if offsets[token_start][1] <= char_start or offsets[token_end - 1][0] >= char_end:
-            raise ValueError("token span does not overlap both card boundaries")
-        token_spans.append((token_start, token_end))
-    return encoded, char_spans, token_spans
